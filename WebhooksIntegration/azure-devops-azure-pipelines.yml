@@ -1,0 +1,93 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+resources: 
+  webhooks:
+    - webhook: MyWebHook
+      connection: WebHook-connection
+
+  repositories:
+    - repository: notification
+      type: github
+      name: maazpatel24/Azure-Devops
+      endpoint: maazpatel24-connection
+      ref: ${{ parameters.MyWebHook.ref }}
+
+trigger: none
+
+variables:
+  branchRef: '${{ parameters.MyWebHook.ref }}'
+  repoName: '${{ parameters.MyWebHook.repository.name }}'
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: Build
+  displayName: Stage 1
+
+  condition: and(contains(variables['branchRef'], 'refs/heads/dev'), contains(variables['repoName'], 'Azure-Devops')) 
+  
+  jobs:
+  - job: 
+    steps: 
+      # - checkout: notification
+
+      - script: |
+          ls
+          # echo ${{ parameters.MyWebHook.ref }}
+          echo $(branchRef)
+          echo $(repoName)
+          echo $(Build.Repository.Name)
+
+          
+  # - template: notifications/senders.yml@notification
+  #   parameters:
+  #     message: "Hello world Maaz"
+  #     senders:
+  #     - Slack
+  #     - MSTeams
+  #     - OutLook
+
+
+# jobs:
+#   - template: notifications/senders.yml@notification
+#     parameters:
+#       message: "Hello world Maaz"
+#       senders:
+#       - Slack
+#       - MSTeams
+#       - OutLook
+
+# ---------------------------------------------
+
+# File: azure-pipelines.yml
+
+# pool:
+#   vmImage: 'ubuntu-latest'
+
+# stages:
+# - stage: Install
+#   jobs: 
+#   - job: npminstall
+#     steps:
+#     - script: echo 'install'
+#       displayName: 'Npm'
+# - template: templates/stages1.yml # Template reference
+# - template: templates/stages2.yml # Template reference
+# ------------------------------------------------------------------
+
+# Repo: Contoso/LinuxProduct
+# File: azure-pipelines.yml
+# resources:
+#   repositories:
+#     - repository: templates
+#       type: github
+#       name: RepoTemplates
+
+# jobs:
+# - template: BuildTemplates/common.yml@templates  # Template reference
+# ----------------------------------------------------------------------
+

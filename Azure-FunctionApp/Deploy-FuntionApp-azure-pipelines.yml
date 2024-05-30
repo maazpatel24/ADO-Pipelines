@@ -1,0 +1,41 @@
+# ASP.NET Core
+# Build and test ASP.NET Core projects targeting .NET Core.
+# Add steps that run tests, create a NuGet package, deploy, and more:
+# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
+
+trigger: none
+
+pool: MAAZ
+
+
+variables:
+  resourceGroup: 'sa1_test_eic_MaazPatel'
+  functionappName: 'dotnet-function-app'
+
+
+jobs:
+  - job: DotnetBuild
+    steps:
+      - task: DotNetCoreCLI@2
+        displayName: dotnet Build
+        inputs:
+          command: 'build'
+          projects: '**/*.csproj'
+          arguments: '--output $(Build.BinariesDirectory)/publish_output --configuration Release'
+      - task: ArchiveFiles@2
+        displayName: Archive
+        inputs:
+          rootFolderOrFile: '$(Build.BinariesDirectory)/publish_output'
+          includeRootFolder: false
+          archiveType: 'zip'
+          archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+          replaceExistingArchive: true
+      - task: PublishBuildArtifacts@1
+        displayName: Publish to Pipeline Artifact
+        inputs:
+          PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+          ArtifactName: 'drop'
+          publishLocation: 'Container'
+
+
+      
