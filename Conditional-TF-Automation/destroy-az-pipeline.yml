@@ -1,0 +1,41 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- none
+
+pool: MAAZ
+
+variables:
+  infraDirectory: $(Build.Repository.Localpath)/Infra
+
+stages:
+  - stage: tfDestroy
+    jobs:
+      - job: Destroy
+        continueOnError: false # with this configuration the job will quit if fails.
+        steps:
+        - task: TerraformInstaller@1
+          displayName: tfinstall
+          inputs:
+            terraformVersion: 'latest'
+        - task: TerraformTaskV4@4
+          displayName: init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(infraDirectory)'
+            backendServiceArm: 'AZ-ServiceConnection'
+            backendAzureRmResourceGroupName: 'sa1_test_eic_MaazPatel'
+            backendAzureRmStorageAccountName: 'terraformremotestate24'
+            backendAzureRmContainerName: 'ado-terraform-automate'
+            backendAzureRmKey: 'terraform.tfstate'
+        - task: TerraformTaskV4@4
+          displayName: destroy
+          inputs:
+            provider: 'azurerm'
+            command: 'destroy'
+            workingDirectory: '$(infraDirectory)'
+            environmentServiceNameAzureRM: 'AZ-ServiceConnection'

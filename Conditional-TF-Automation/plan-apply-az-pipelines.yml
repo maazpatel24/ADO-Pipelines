@@ -1,0 +1,174 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- none
+
+pool: MAAZ
+
+variables:
+  infraDirectory: $(Build.Repository.Localpath)/Infra
+
+stages:
+  - stage: tfPlan
+    jobs:
+      - job: Validate
+        continueOnError: false # with this configuration the job will quit if fails.
+        steps:
+        - task: TerraformInstaller@1
+          displayName: tfinstall
+          inputs:
+            terraformVersion: 'latest'
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |
+              ls $(infraDirectory)
+              echo $(infraDirectory)
+              ls $(System.DefaultWorkingDirectory)
+        - task: TerraformTaskV4@4
+          displayName: init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(infraDirectory)'
+            backendServiceArm: 'AZ-ServiceConnection'
+            backendAzureRmResourceGroupName: 'sa1_test_eic_MaazPatel'
+            backendAzureRmStorageAccountName: 'terraformremotestate24'
+            backendAzureRmContainerName: 'ado-terraform-automate'
+            backendAzureRmKey: 'terraform.tfstate'
+        - task: TerraformTaskV4@4
+          displayName: validate
+          inputs:
+            provider: 'azurerm'
+            command: 'validate'
+            workingDirectory: '$(infraDirectory)'
+        - task: Bash@3
+          displayName: plan
+          inputs:
+            targetType: 'inline'
+            script: |
+              terraform plan -out=tfplan.out > plan_output.txt
+              if grep -q "No changes" plan_output.txt; then
+                echo "##vso[task.setvariable variable=CHANGES;isoutput=true]false"
+              else
+                echo "##vso[task.setvariable variable=CHANGES;isoutput=true]true"
+              fi
+            workingDirectory: '$(infraDirectory)'
+          name: setChangeVar
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |
+              ls $(System.DefaultWorkingDirectory)
+              echo ------------------------------------------------
+              ls $(infraDirectory)
+        - task: PublishPipelineArtifact@1
+          inputs:
+            targetPath: '$(infraDirectory)/tfplan.out'
+            artifact: 'tfPlan.out-File'
+            publishLocation: 'pipeline'
+
+
+      # - job: B
+      #   dependsOn: Validate
+      #   condition: eq( dependencies.Validate.outputs['setChangeVar.CHANGES'], 'true' )
+      #   variables:
+      #     myvarout: $[ dependencies.Validate.outputs['setChangeVar.CHANGES'] ]
+      #   steps:
+      #     - bash: |
+      #         echo $(myvarout)  
+
+      #   # - task: Bash@3
+      #   #   displayName: 'echo $(CHANGES)'
+      #   #   inputs:
+      #   #     targetType: 'inline'
+      #   #     script: 'echo $(CHANGES)'
+      #   # - task: TerraformTaskV4@4
+      #     # displayName: plan
+      #     # inputs:
+      #       # provider: 'azurerm'
+      #       # command: 'plan'
+      #       # workingDirectory: '$(infraDirectory)'
+      #       # commandOptions: '-out=tfplan.out'
+      #       # environmentServiceNameAzureRM: 'AZ-ServiceConnection'
+      #     - task: Bash@3
+      #       inputs:
+      #         targetType: 'inline'
+      #         script: |
+      #           ls $(System.DefaultWorkingDirectory)
+      #           echo ------------------------------------------------
+      #           ls $(infraDirectory)
+
+      # - job: manual_approval
+      #   steps:
+      #     - task: ManualValidation@1
+      #       inputs:
+      #         notifyUsers: 'Please Validate your code'
+
+  - stage: manualValidation
+    dependsOn: tfPlan
+    condition: and( succeeded(), eq(stageDependencies.tfPlan.outputs['Validate.setChangeVar.CHANGES'], 'true'))
+    jobs:
+      - job: manual_approval
+        # condition: eq(stageDependencies.tfPlan.Validate.outputs['setChangeVar.CHANGES'], 'true')
+        pool: server
+        steps:
+        - task: ManualValidation@1
+          inputs:
+            instructions: 'Hi, Please Validate'
+  
+  - stage: tfdeploy
+    variables:
+      myStageVar: $[stageDependencies.tfPlan.Validate.outputs['setChangeVar.CHANGES']]
+    dependsOn: manualValidation
+    condition: and( succeeded(), eq(stageDependencies.tfPlan.outputs['Validate.setChangeVar.CHANGES'], 'true'))
+    jobs:
+      - job: tfApply
+        # condition: eq(stageDependencies.tfPlan.Validate.outputs['setChangeVar.CHANGES'], 'false')
+        steps:
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: 'current'
+            artifactName: 'tfPlan.out-File'
+            targetPath: '$(infraDirectory)'
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |
+              echo $(myStageVar)
+              ls $(System.DefaultWorkingDirectory)
+              echo ------------------------------------------------
+              ls $(infraDirectory)
+        - task: TerraformInstaller@1
+          displayName: tfinstall
+          inputs:
+            terraformVersion: 'latest'
+        - task: Bash@3
+          inputs:
+            targetType: 'inline'
+            script: |
+              ls $(infraDirectory)
+              echo $(infraDirectory)
+              ls $(System.DefaultWorkingDirectory)
+        - task: TerraformTaskV4@4
+          displayName: init
+          inputs:
+            provider: 'azurerm'
+            command: 'init'
+            workingDirectory: '$(infraDirectory)'
+            backendServiceArm: 'AZ-ServiceConnection'
+            backendAzureRmResourceGroupName: 'sa1_test_eic_MaazPatel'
+            backendAzureRmStorageAccountName: 'terraformremotestate24'
+            backendAzureRmContainerName: 'ado-terraform-automate'
+            backendAzureRmKey: 'terraform.tfstate'
+        - task: TerraformTaskV4@4
+          displayName: apply
+          inputs:
+            provider: 'azurerm'
+            command: 'apply'
+            workingDirectory: '$(infraDirectory)'
+            commandOptions: 'tfplan.out'
+            environmentServiceNameAzureRM: 'AZ-ServiceConnection'
